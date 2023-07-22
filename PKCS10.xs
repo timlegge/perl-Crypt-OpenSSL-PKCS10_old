@@ -15,7 +15,7 @@
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined LIBRESSL_VERSION_NUMBER
 #define EVP_PKEY_get0_RSA(pkey) ((pkey)->pkey.rsa)
 #define EVP_PKEY_get0_DSA(pkey) ((pkey)->pkey.dsa)
-#ifndef OPENSSL_NO_EC || defined LIBRESSL_VERSION_NUMBER
+#if( !defined OPENSSL_NO_EC || defined LIBRESSL_VERSION_NUMBER)
 #define EVP_PKEY_get0_EC_KEY(pkey) ((pkey)->pkey.ec)
 #endif
 #endif
