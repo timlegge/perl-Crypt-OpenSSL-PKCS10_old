@@ -54,7 +54,7 @@ X509_NAME *parse_name(char *subject, long chtype, int multirdn)
 	size_t buflen = strlen(subject)+1; /* to copy the types and values into. due to escaping, the copy can only become shorter */
 	char *buf = OPENSSL_malloc(buflen);
 	size_t max_ne = buflen / 2 + 1; /* maximum number of name elements */
-	char **ne_types = OPENSSL_malloc(max_ne * sizeof (char *));
+	const char **ne_types = OPENSSL_malloc(max_ne * sizeof (char *));
 	char **ne_values = OPENSSL_malloc(max_ne * sizeof (char *));
 	int *mval = OPENSSL_malloc (max_ne * sizeof (int));
 
@@ -154,7 +154,7 @@ X509_NAME *parse_name(char *subject, long chtype, int multirdn)
 			continue;
 			}
 
-		if (!X509_NAME_add_entry_by_txt(n, (unsigned char*)ne_types[i], chtype, (unsigned char*)ne_values[i], -1,-1,mval[i]))
+		if (!X509_NAME_add_entry_by_txt(n, ne_types[i], chtype, (unsigned char*)ne_values[i], -1,-1,mval[i]))
 			goto error;
 		}
 
