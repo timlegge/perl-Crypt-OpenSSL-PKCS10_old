@@ -194,13 +194,13 @@ int add_ext(STACK_OF(X509_EXTENSION) *sk, X509_REQ *req, int nid, char *value)
 
 /*  Add an extention by setting the raw ASN1 octet string.
  */
-int add_ext_raw(STACK_OF(X509_EXTENSION) *sk, int nid, unsigned char *value, int length)
+int add_ext_raw(STACK_OF(X509_EXTENSION) *sk, int nid, char *value, int length)
 	{
 	X509_EXTENSION *ex;
 	ASN1_STRING *asn;
 
 	asn = ASN1_STRING_type_new(V_ASN1_OCTET_STRING);
-	ASN1_OCTET_STRING_set(asn, value, length);
+	ASN1_OCTET_STRING_set(asn, (unsigned char *) value, length);
 
 	ex = X509_EXTENSION_create_by_NID(NULL, nid, 0, asn);
 	if (!ex)
