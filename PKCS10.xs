@@ -576,7 +576,7 @@ set_subject(pkcs10, subj_SV, utf8 = 0)
 	int utf8;
 
 	PREINIT:
-	unsigned char* subj;
+	char* subj;
 	STRLEN subj_length;
 
 	CODE:
@@ -596,7 +596,7 @@ add_ext(pkcs10, nid = NID_key_usage, ext_SV)
 	SV* ext_SV;
 
 	PREINIT:
-	unsigned char* ext;
+	char* ext;
 	STRLEN ext_length;
 
 	CODE:
@@ -619,8 +619,8 @@ add_custom_ext_raw(pkcs10, oid_SV, ext_SV)
 	SV* ext_SV;
 
 	PREINIT:
-	unsigned char* oid;
-	unsigned char* ext;
+	char* oid;
+	char* ext;
 	STRLEN ext_length;
 	int nid;
 
@@ -649,8 +649,8 @@ add_custom_ext(pkcs10, oid_SV, ext_SV)
 	SV* ext_SV;
 
 	PREINIT:
-	unsigned char* oid;
-	unsigned char* ext;
+	char* oid;
+	char* ext;
 	STRLEN ext_length;
 	int nid;
 
@@ -698,7 +698,7 @@ new_from_file(class, filename_SV)
   SV* filename_SV;
 
   PREINIT:
-  unsigned char* filename;
+  char* filename;
   STRLEN filename_length;
   FILE* fp;
   X509_REQ *req;
