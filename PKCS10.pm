@@ -46,7 +46,7 @@ Crypt::OpenSSL::PKCS10 - Perl extension to OpenSSL's PKCS10 API.
 
 =head1 SYNOPSIS
 
-  use Crypt::OpenSSL::PKCS10::PKCS10 qw( :const );
+  use Crypt::OpenSSL::PKCS10 qw( :const );
   
   my $req = Crypt::OpenSSL::PKCS10->new;
   $req->set_subject("/C=RO/O=UTI/OU=ssi");
