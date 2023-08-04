@@ -9,6 +9,7 @@
 #include <openssl/pem.h>
 #include <openssl/x509v3.h>
 #include <openssl/err.h>
+#include <openssl/rand.h>
 
 #include "ppport.h"
 
@@ -36,7 +37,7 @@ typedef struct
 } Crypt__OpenSSL__RSA; 
 
 #define PACKAGE_NAME "Crypt::OpenSSL::PKCS10"
-#define PACKAGE_CROAK(p_message) croak("%s:%d: %s", (p_message))
+#define PACKAGE_CROAK(p_message) croak("%s", (p_message))
 #define CHECK_NEW(p_var, p_size, p_type) \
   if (New(0, p_var, p_size, p_type) == NULL) \
     { PACKAGE_CROAK("unable to alloc buffer"); }
@@ -227,20 +228,23 @@ SV* make_pkcs10_obj(SV* p_proto, X509_REQ* p_req, EVP_PKEY* p_pk, STACK_OF(X509_
 }
 
 /* stolen from OpenSSL.xs */
-long bio_write_cb(struct bio_st *bm, int m, const char *ptr, int l, long x, long y) {
-
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+long bio_write_cb(struct bio_st *bm, int m, const char *ptr, size_t len, int l, long x, int y, size_t *processed) {
+#else
+long bio_write_cb(struct bio_st *bm, int m, const char *ptr, int len, long x, long y) {
+#endif
         if (m == BIO_CB_WRITE) {
                 SV *sv = (SV *) BIO_get_callback_arg(bm);
-                sv_catpvn(sv, ptr, l);
+                sv_catpvn(sv, ptr, len);
         }
 
         if (m == BIO_CB_PUTS) {
                 SV *sv = (SV *) BIO_get_callback_arg(bm);
-                l = strlen(ptr);
-                sv_catpvn(sv, ptr, l);
+                len = strlen(ptr);
+                sv_catpvn(sv, ptr, len);
         }
 
-        return l;
+        return len;
 }
 
 static BIO* sv_bio_create(void) {
@@ -250,7 +254,11 @@ static BIO* sv_bio_create(void) {
 	/* create an in-memory BIO abstraction and callbacks */
         BIO *bio = BIO_new(BIO_s_mem());
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        BIO_set_callback_ex(bio, bio_write_cb);
+#else
         BIO_set_callback(bio, bio_write_cb);
+#endif
         BIO_set_callback_arg(bio, (void *)sv);
 
         return bio;
@@ -339,25 +347,48 @@ new(class, keylen = 1024)
 	PREINIT:
 	X509_REQ *x;
 	EVP_PKEY *pk;
-	RSA *rsa = NULL;
-	
+    char *classname = SvPVutf8_nolen(class);
+
 	CODE:
 	//CRYPTO_mem_ctrl(CRYPTO_MEM_CHECK_ON);
-	
-	if ((pk=EVP_PKEY_new()) == NULL)
-		croak ("%s - can't create PKEY", class);
+    if (!RAND_status())
+        printf("Warning: generating random key material may take a long time\n"
+                   "if the system has a poor entropy source\n");
 
 	if ((x=X509_REQ_new()) == NULL)
-		croak ("%s - can't create req", class);
+		croak ("%s - can't create req", classname);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    pk = EVP_RSA_gen(keylen);
+#elif OPENSSL_VERSION_NUMBER <= 0x10000000L
+    RSA *rsa;
+	if ((pk=EVP_PKEY_new()) == NULL)
+		croak ("%s - can't create PKEY", classname);
 
 	rsa=RSA_generate_key(keylen, RSA_F4, NULL, NULL);
 	if (!EVP_PKEY_assign_RSA(pk,rsa))
-		croak ("%s - EVP_PKEY_assign_RSA", class);
-	
+		croak ("%s - EVP_PKEY_assign_RSA", classname);
+#else
+    RSA *rsa = RSA_new();
+    BIGNUM *bne = BN_new();
+    if (bne == NULL)
+		croak ("%s - BN_new failed", classname);
+
+    if (BN_set_word(bne, RSA_F4) != 1)
+		croak ("%s - BN_set_word failed", classname);
+
+	if ((pk=EVP_PKEY_new()) == NULL)
+		croak ("%s - can't create PKEY", classname);
+
+    if (!RSA_generate_key_ex(rsa, keylen, bne, NULL))
+		croak ("%s - RSA_generate_key_ex failed", classname);
+
+	if (!EVP_PKEY_assign_RSA(pk,rsa))
+		croak ("%s - EVP_PKEY_assign_RSA", classname);
+#endif
 	X509_REQ_set_pubkey(x,pk);
 	X509_REQ_set_version(x,0L);
 	if (!X509_REQ_sign(x,pk,EVP_sha256()))
-		croak ("%s - X509_REQ_sign", class);
+		croak ("%s - X509_REQ_sign failed", classname);
 	
 	RETVAL = make_pkcs10_obj(class, x, pk, NULL, NULL);
   
@@ -382,32 +413,43 @@ DESTROY(pkcs10)
 	BIO_free(bio_err);*/
 
 SV*
-new_from_rsa(class, p_rsa)
+_new_from_rsa(class, p_rsa, priv)
 	SV	*class
 	SV	*p_rsa
+	SV  *priv
 
 	PREINIT:
 	Crypt__OpenSSL__RSA	*rsa;
+	char *keyString;
+	STRLEN keylen;
+	BIO *bio;
 	X509_REQ *x;
 	EVP_PKEY *pk;
+	char *classname = SvPVutf8_nolen(class);
 	
 	CODE:
-	//CRYPTO_mem_ctrl(CRYPTO_MEM_CHECK_ON);
-	
-	if ((pk=EVP_PKEY_new()) == NULL)
-		croak ("%s - can't create PKEY", class);
+
+	// Get the private key and save it in memory
+	keyString = SvPV(priv, keylen);
+	bio = BIO_new_mem_buf(keyString, keylen);
+	if (bio == NULL) {
+		croak ("Bio is null **** \n");
+	}
+
+	// Create the PrivateKey as EVP_PKEY
+	pk = PEM_read_bio_PrivateKey(bio, NULL, 0, NULL);
+	if (pk == NULL) {
+		croak("Failed operation error code %d\n", errno);
+	}
 
 	if ((x=X509_REQ_new()) == NULL)
-		croak ("%s - can't create req", class);
+		croak ("%s - can't create req", classname);
 
 	rsa = (Crypt__OpenSSL__RSA	*) SvIV(SvRV(p_rsa));
-	if (!EVP_PKEY_assign_RSA(pk,rsa->rsa))
-		croak ("%s - EVP_PKEY_assign_RSA", class);
-	
 	X509_REQ_set_pubkey(x,pk);
 	X509_REQ_set_version(x,0L);
 	if (!X509_REQ_sign(x,pk,EVP_sha256()))
-		croak ("%s - X509_REQ_sign", class);
+		croak ("%s - X509_REQ_sign", classname);
 	
 	RETVAL = make_pkcs10_obj(class, x, pk, NULL, &rsa->rsa);
 
@@ -452,16 +494,12 @@ get_pem_pubkey(pkcs10)
 
 	type = EVP_PKEY_base_id(pkey);
 	if (type == EVP_PKEY_RSA) {
-
-#		PEM_write_bio_RSAPublicKey(bio, EVP_PKEY_get0_RSA(pkey));
-		PEM_write_bio_RSA_PUBKEY(bio, EVP_PKEY_get0_RSA(pkey));
-
+		PEM_write_bio_PUBKEY(bio, pkey);
 	} else if (type == EVP_PKEY_DSA) {
-
-		PEM_write_bio_DSA_PUBKEY(bio, EVP_PKEY_get0_DSA(pkey));
+		PEM_write_bio_PUBKEY(bio, pkey);
 #ifndef OPENSSL_NO_EC
 	} else if ( type == EVP_PKEY_EC ) {
-		PEM_write_bio_EC_PUBKEY(bio, EVP_PKEY_get0_EC_KEY(pkey));
+		PEM_write_bio_PUBKEY(bio, pkey);
 #endif
 	} else {
 
@@ -562,7 +600,7 @@ get_pem_pk(pkcs10,...)
 	/* get the certificate back out in a specified format. */
 
 	if(!PEM_write_bio_PrivateKey(bio,pkcs10->pk,NULL,NULL,0,NULL,NULL))
-		croak ("%s - PEM_write_bio_PrivateKey", pkcs10->pk);
+		croak ("%s - PEM_write_bio_PrivateKey", (char *) pkcs10->pk);
 
 	RETVAL = sv_bio_final(bio);
 
@@ -686,7 +724,7 @@ add_ext_final(pkcs10)
 	if(pkcs10->exts)
 		sk_X509_EXTENSION_pop_free(pkcs10->exts, X509_EXTENSION_free);
 	} else {
-		RETVAL = NULL;
+		RETVAL = 0;
 	}
 
 	OUTPUT:
@@ -741,8 +779,12 @@ accessor(pkcs10)
       name = X509_REQ_get_subject_name(pkcs10->req);
       X509_NAME_print_ex(bio, name, 0, XN_FLAG_SEP_CPLUS_SPC);
     } else if (ix == 2 ) {
-      key = X509_REQ_extract_key(pkcs10->req);
+      key = X509_REQ_get_pubkey(pkcs10->req);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+      EVP_PKEY_print_public(bio, key, 0, NULL);
+#else
       RSA_print(bio, EVP_PKEY_get1_RSA(key), 0);
+#endif
     }
   }
 
