@@ -64,7 +64,7 @@ X509_NAME *parse_name(char *subject, long chtype, int multirdn)
 
 	X509_NAME *n = NULL;
 
-	if (!buf || !ne_types || !ne_values)
+	if (!buf || !ne_types || !ne_values || !mval)
 		{
 		croak("malloc error\n");
 		goto error;
@@ -173,6 +173,8 @@ X509_NAME *parse_name(char *subject, long chtype, int multirdn)
 		OPENSSL_free(ne_types);
 	if (buf)
 		OPENSSL_free(buf);
+    if (mval)
+	    OPENSSL_free(mval);
 	return NULL;
 }
 
