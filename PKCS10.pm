@@ -30,12 +30,21 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 	
 #);
 
-our $VERSION = '0.20';
+our $VERSION = '0.21';
 
 require XSLoader;
 XSLoader::load('Crypt::OpenSSL::PKCS10', $VERSION);
 
 # Preloaded methods go here.
+
+sub new_from_rsa {
+    my $self = shift;
+    my $rsa = shift;
+
+    my $priv = $rsa->get_private_key_string();
+    $self->_new_from_rsa($rsa, $priv);
+
+}
 
 1;
 __END__
@@ -46,7 +55,7 @@ Crypt::OpenSSL::PKCS10 - Perl extension to OpenSSL's PKCS10 API.
 
 =head1 SYNOPSIS
 
-  use Crypt::OpenSSL::PKCS10::PKCS10 qw( :const );
+  use Crypt::OpenSSL::PKCS10 qw( :const );
   
   my $req = Crypt::OpenSSL::PKCS10->new;
   $req->set_subject("/C=RO/O=UTI/OU=ssi");
@@ -85,6 +94,8 @@ Create a new Crypt::OpenSSL::PKCS10 object by using key information from a Crypt
 
   my $rsa = Crypt::OpenSSL::RSA->generate_key(512);
   my $req = Crypt::OpenSSL::PKCS10->new_from_rsa($rsa);
+
+OpenSSL 3.0 has deprecated the RSA object which Crypt::OpenSSL::RSA creates.  new_from_rsa() is now a perl sub which obtains the private key as a string that is also passed to the _new_from_rsa() XS function.
 
 =item new_from_file( $filename )
 

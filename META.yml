@@ -25,6 +25,7 @@ requires:
   Crypt::OpenSSL::RSA: '0'
 resources:
   bugtracker: https://rt.cpan.org/Public/Dist/Display.html?Name=Crypt-OpenSSL-PKCS10
+  repository: git@github.com:perl-net-saml2/perl-Crypt-OpenSSL-PKCS10.git
   homepage: https://metacpan.org/pod/Crypt::OpenSSL::PKCS10
   license: http://dev.perl.org/licenses/
 version: '0.20'
