@@ -49,6 +49,8 @@ sub new_from_rsa {
 1;
 __END__
 
+# ABSTRACT: Perl extension to OpenSSL's PKCS10 API.
+
 =head1 NAME
 
 Crypt::OpenSSL::PKCS10 - Perl extension to OpenSSL's PKCS10 API.
